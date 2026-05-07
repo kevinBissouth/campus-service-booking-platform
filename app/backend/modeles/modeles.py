@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from datetime import date
 
 
@@ -12,19 +12,23 @@ class Utilisateur(BaseModel):
     mot_de_passe : str = Field(min_length=8)
     
 class Service(BaseModel):
+    id: int | None = None
     nom: str
     description: str = Field(min_length=10)
     est_actif : int = Field(ge=0, le=1)
 
 class Reservation(BaseModel):
+    id: int | None = None
     etudiant: int
-    admin: int
+    admin: int | None = None
     email: str
     service_choisis: int
     demande: str = Field(min_length=10)
-    date_souhaitee: date 
+    date_souhaitee: str | date
     creneau_horaire: str
     statut: str
+    
+    model_config = ConfigDict(extra="ignore")
 
 class LoginRequest(BaseModel):
     email: str
@@ -35,4 +39,3 @@ class EtudiantProfil(BaseModel):
     filiere: str
     niveau: str
     poste_campus: str
-    

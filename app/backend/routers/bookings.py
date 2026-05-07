@@ -9,7 +9,7 @@ from backend.database.database import get_db_connection
 from backend.modeles.modeles import Service, Reservation
 
 
-router = APIRouter(prefix="/bookings", tags=["bookings"])
+router = APIRouter(tags=["bookings"])
 
 # ============================ FONCTIONS ET ENDPOINTS POUR LES SERVICES ===========================
 
@@ -107,9 +107,9 @@ async def modifier_service_data(service_id: int, service: Service):
     return service
 
 # Route pour recuperer un service par id
-@router.get("/get_service_by_id/{service_id}", response_model=Service)
-async def rucuperer_service_par_id(service_id: int):
-    service = recuperer_service_par_idF(service_id)
+@router.get("/services/{id}", response_model=Service)
+async def rucuperer_service_par_id(id: int):
+    service = recuperer_service_par_idF(id)
     if service is None:
         raise HTTPException(status_code=404, detail="service non trouvé")
     return service
@@ -125,7 +125,7 @@ async def creer_service(service: Service):
 
 
 # Route pour obtenir tous les Services
-@router.get("/get_all_services/", response_model=List[Service])
+@router.get("/services", response_model=List[Service])
 async def recuperer_tous_les_services():
     loop = asyncio.get_running_loop()
     services = await loop.run_in_executor(None, recuperer_tous_les_servicesF)
@@ -142,20 +142,27 @@ def ajouter_reservation(reservation: Reservation):
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
+        if reservation.admin is None:
+            reservation.admin = 0
+
+        date_souhaitee = reservation.date_souhaitee
+        if hasattr(date_souhaitee, "isoformat"):
+            date_souhaitee = date_souhaitee.isoformat()
+
         cursor.execute('''
         INSERT INTO reservation(etudiant, admin, email, service_choisis, demande, date_souhaitee, creneau_horaire, statut) 
         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (reservation.etudiant, reservation.admin, reservation.email, reservation.service_choisis, reservation.demande, reservation.date_souhaitee.isoformat(), reservation.creneau_horaire, reservation.statut))
+        ''', (reservation.etudiant, reservation.admin, reservation.email, reservation.service_choisis, reservation.demande, date_souhaitee, reservation.creneau_horaire, reservation.statut))
         conn.commit()
-    except sqlite3.Error as e:
+    except Exception as e:
         conn.rollback()
         return {"error": f"{e}"}
     finally:
         conn.close()
-        
+
 
 # Fonction pour recuperer toutes les reservations     
-def recuperer_tous_les_reservationF():
+def recuperer_toutes_les_reservationF():
     conn = get_db_connection()
     cursor = conn.cursor()
     try:
@@ -213,12 +220,12 @@ def supprimer_reservation(reservation_id: int):
 
     # ============================== ENDPOINTS =============================
 # Route pour supprimer une reservation
-@router.delete("/delete_reservation/{reservation_id}")
-async def supprimer_reservation_data(reservation_id: int):
-    service_existant = recuperer_reservation_par_idF(reservation_id)
-    if service_existant is None:
+@router.delete("/bookings/{id}")
+async def supprimer_reservation_data(id: int):
+    reservation_existant = recuperer_reservation_par_idF(id)
+    if reservation_existant is None:
         raise HTTPException(status_code=404, detail="reservation non trouvé")
-    supprimer_service(reservation_id)
+    supprimer_reservation(id)
     return {"message": "reservation supprimé avec succès."}
 
 
@@ -233,27 +240,30 @@ async def modifier_reservation_data(reservation_id: int, reservation: Reservatio
 
 
 # Route pour recuperer une reservation par id
-@router.get("/get_reservation_by_id/{reservation_id}", response_model=Reservation)
-async def rucuperer_reservation_par_id(reservation_id: int):
-    service = recuperer_reservation_par_idF(reservation_id)
+@router.get("/bookings/{id}", response_model=Reservation)
+async def rucuperer_reservation_par_id(id: int):
+    service = recuperer_reservation_par_idF(id)
     if service is None:
         raise HTTPException(status_code=404, detail="reservation non trouvé")
     return service
 
 
 # Route pour obtenir toutes les reservations
-@router.get("/get_all_reservations/", response_model=List[Reservation])
+@router.get("/bookings", response_model=List[Reservation])
 async def recuperer_tous_les_reservation():
     loop = asyncio.get_running_loop()
-    reservations = await loop.run_in_executor(None, recuperer_tous_les_reservationF)
+    reservations = await loop.run_in_executor(None, recuperer_toutes_les_reservationF)
     if reservations is None:
         raise HTTPException(status_code=404, detail="Aucune reservation")
     return reservations
 
 
 # Route pour ajouter une reservation
-@router.post("/add_reservation/")
+@router.post("/bookings")
 async def creer_reservation(reservation: Reservation):
+    # Set default admin to 0 if not provided
+    if reservation.admin is None:
+        reservation.admin = 0
     message = ajouter_reservation(reservation)
     if not message:
         return {"message": "reservation ajoutée avec succès."}
